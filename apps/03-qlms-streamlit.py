@@ -47,14 +47,16 @@ st.markdown(
     """
     #### ***QGSP in action***
 
-    # Filter design using QLMS
+    # Denoising in quaternion graph signal via FIR low-pass filtering
 
-    This streamlit app aims to
+    This streamlit app will cover all the basic aspects of **quaternion graph signal processing (QGSP)** using the `gspx` open-source Python package. It will
 
-    - Create a graph with quaternion-valued edge weights.
-    - Define a quaternion-valued graph signal.
-    - Compute the Quaternion Graph Fourier Transform (QGFT) direct and inverse matrices.
-    - Generate the quaternion graph signal spectrum.
+    - create a **graph with quaternion-valued edge weights**,
+    - define a **quaternion graph signal**,
+    - compute the quaternion graph Fourier transform **(QGFT)** direct and inverse matrices,
+    - generate the quaternion graph signal spectrum,
+    - **design a FIR low-pass quaternion graph filter**, and
+    - **denoise** a graph signal through low-pass filtering.
 
     Let us first build a graph connecting some cities in England, using edges with quaternion-valued weights and define over it a quaternion-valued signal.
     """
@@ -79,10 +81,11 @@ Ar, coords = data.graph
 s = data.signal
 df = data.data
 
-Aq = data.quaternion_adjacency_matrix()
+Aq = data.quaternion_adjacency_matrix(gauss_den=2, Hermitian=True)
 """,
 language="python"
 )
+st.markdown("The matrix is made **Hermitian** (i.e., its transpose equals its conjugate). The magnitudes of each edge weight depend on the geographic distance between UK towns, whereas their phase ir parallel to the difference between the quaternion-valued signal samples.")
 
 st.markdown("The graph is depicted in the figure below.")
 
@@ -97,7 +100,7 @@ st.markdown("The data in columns `'humidity', 'pressure', 'temp', 'wind_speed'` 
 @st.cache
 def get_quaternion_adj():
     """Run and cache."""
-    Aq = data.quaternion_adjacency_matrix()
+    Aq = data.quaternion_adjacency_matrix(gauss_den=2, Hermitian=True)
     return Aq
 
 st.markdown("**Figure: Quaternion graph signal.**")
@@ -215,24 +218,21 @@ show_and_save(
     plot_name="uk_spectrum_noisy", fig=fig,
     fig_size_inches=(9, 5.5))
 
-st.markdown("The QLMS in now executed trying out the following values of step size: `[0.0001, 0.0005, 0.001, 0.002]`. The filter has **N = 7** filter taps (i.e. it is a polynomial of degree **L = 6** on the graph adjacency matrix).")
+N = 7
+step_sizes = [0.0001, 0.002, 0.004]
+max_iter = 40
+st.markdown(
+    f"The QLMS in now executed trying out the following values of step size: `{step_sizes}`.\nThe filter has **N = {N}** filter taps (i.e. it is a polynomial of degree **L = {N-1}** on the graph adjacency matrix).\nThe QLMS runs for at most {max_iter} iterations.")
 
-@st.cache
-def qlms_computation():
-    N = 7
-    X = QMatrix.vander(qgft.eigq, N, increasing=True)
-    y = h_idealq
+X = QMatrix.vander(qgft.eigq, N, increasing=True)
+y = h_idealq
 
-    qlms = QLMS(
-        step_size=[0.0001, 0.0005, 0.001, 0.002], verbose=2)
-    qlms.fit(X, y)
-    return X, qlms
-
-with st.spinner('QLMS computation:'):
-    X, qlms = qlms_computation()
+qlms = QLMS(
+    step_size=step_sizes, verbose=2, max_iter=max_iter)
+qlms.fit(X, y)
 
 st.markdown("The plot below shows the cost per iteration of the QLMS (only for the values of step sizes that did not cause interruption by divergence - our implementation has an `early stop` parameter that interrupts the calculations if the cost increases for more than 10 iterations).")
-qlms.plot(nsamples=100)
+qlms.plot(nsamples=max_iter)
 
 show_and_save(
     plot_name="uk_qlms_iterations",
@@ -275,14 +275,14 @@ def norm_mse(s_ref, s_approx):
 
 mse_ = norm_mse(s, sn)
 st.markdown(
-    f"Mean squared error (MSE) before filtering (noisy signal): {mse_}")
+    f"Normalized mean squared error (NMSE) before filtering (noisy signal): {mse_}")
 
 ssn_lpf = (ss + nn).hadamard(h_idealq)
 s_lpf = qgft.inverse_transform(ssn_lpf)
 
 mse_ = norm_mse(s, s_lpf)
 st.markdown(
-    f"Mean squared error (MSE) after filtering: {mse_}")
+    f"NMSE after filtering: {mse_}")
 
 fig = QuaternionSignal.show(ssn_lpf, ordering=qgft.idx_freq)
 show_and_save(
@@ -293,14 +293,14 @@ st.markdown("Now let us use our FIR LSI filter:.")
 
 mse_ = norm_mse(s, sn)
 st.markdown(
-    f"Mean squared error (MSE) before filtering (noisy signal): {mse_}")
+    f"NMSE before filtering (noisy signal): {mse_}")
 
 ssn_lpf = (ss + nn).hadamard(h_opt)
 s_lpf = qgft.inverse_transform(ssn_lpf)
 
 mse_ = norm_mse(s, s_lpf)
 st.markdown(
-    f"Mean squared error (MSE) after filtering: {mse_}")
+    f"NMSE after filtering: {mse_}")
 
 fig = QuaternionSignal.show(ssn_lpf, ordering=qgft.idx_freq)
 show_and_save(
