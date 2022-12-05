@@ -224,12 +224,13 @@ max_iter = 40
 st.markdown(
     f"The QLMS in now executed trying out the following values of step size: `{step_sizes}`.\nThe filter has **N = {N}** filter taps (i.e. it is a polynomial of degree **L = {N-1}** on the graph adjacency matrix).\nThe QLMS runs for at most {max_iter} iterations.")
 
-X = QMatrix.vander(qgft.eigq, N, increasing=True)
-y = h_idealq
+with st.spinner('Running the QLMS algorithm.'):
+    X = QMatrix.vander(qgft.eigq, N, increasing=True)
+    y = h_idealq
 
-qlms = QLMS(
-    step_size=step_sizes, verbose=2, max_iter=max_iter)
-qlms.fit(X, y)
+    qlms = QLMS(
+        step_size=step_sizes, verbose=2, max_iter=max_iter)
+    qlms.fit(X, y)
 
 st.markdown("The plot below shows the cost per iteration of the QLMS (only for the values of step sizes that did not cause interruption by divergence - our implementation has an `early stop` parameter that interrupts the calculations if the cost increases for more than 10 iterations).")
 qlms.plot(nsamples=max_iter)
